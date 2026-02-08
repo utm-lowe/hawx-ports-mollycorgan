@@ -157,6 +157,22 @@ port_init(void)
     // non-kernal ports. Make sure that all ports are empty.
 
     // YOUR CODE HERE
+    for (int i=0; i<NPORT; i++) {
+        ports[i].head = 0;
+        ports[i].tail = 0;
+        ports[i].count = 0;
+
+        if (i==PORT_CONSOLEIN || i==PORT_CONSOLEOUT || i==PORT_DISKCMD) {
+            ports[i].free = 0;
+            ports[i].owner = 0;
+            ports[i].type = PORT_TYPE_KERNEL;
+        }
+        else {
+            ports[i].free = 1;
+            ports[i].owner = -1;
+            ports[i].type = PORT_TYPE_FREE;
+        }
+    }
 }
 
 
@@ -168,6 +184,25 @@ port_close(int port)
     // if it is open, we empty its contents and mark it as free.
 
     // YOUR CODE HERE
+    if (port < 0 || port >= NPORT) {
+        return;
+    }
+
+    if (ports[port].type == PORT_TYPE_KERNEL) {
+        return;
+    }
+
+    if (ports[port].free) {
+        return;
+    }
+
+    ports[port].free = 1;
+    ports[port].owner = -1;
+    ports[port].head = 0;
+    ports[port].tail = 0;
+    ports[port].count = 0;
+
+
 }
 
 
@@ -185,6 +220,32 @@ port_acquire(int port, procid_t proc_id)
     // If this operation fails, return -1.
 
     // YOUR CODE HERE
+    if (port == -1) {
+        for (int i=0; i < NPORT; i++) {
+            if (ports[i].free && ports[i].type != PORT_TYPE_KERNEL) {
+                ports[i].free = 0;
+                ports[i].owner = proc_id;
+                return i;
+            }
+        }
+        return -1;
+
+        if (port < 0 || port >= NPORT) {
+            return -1;
+        }
+
+        if (ports[port].type == PORT_TYPE_KERNEL) {
+            return -1;
+        }
+
+        if (!ports[port].free) {
+            return -1;
+        }
+
+        ports[port].free = 0;
+        ports[port].owner = proc_id;
+        return port;
+    }
     
     return -1;
 }
@@ -201,7 +262,23 @@ port_write(int port, char *buf, int n)
     // write it.
 
     // YOUR CODE HERE
-    return -1;
+    if (port <0 || port >= NPORT) {
+        return -1;
+    }
+
+    if (ports[port].free) {
+        return -1;
+    }
+
+    int written = 0;
+    while (written < n && ports[port].count < PORT_BUF_SIZE) {
+        ports[port].buffer[ports[port].head] = buf[written];
+        ports[port].head = (ports[port].head + 1) % PORT_BUF_SIZE;
+        ports[port].count++;
+        written++;
+    }
+    return written;
+    
 }
 
 
@@ -216,6 +293,22 @@ port_read(int port, char *buf, int n)
     // Be sure to update count as you read.
 
     // YOUR CODE HERE
+    if (port < 0 || port >= NPORT) {
+        return -1;
+    }
+
+    if (ports[port].free) {
+        return -1;
+    }
+
+    int read = 0;
+    while (read < n && ports[port].count > 0) {
+        buf[read] = ports[port].buffer[ports[port].tail];
+        ports[port].tail = (ports[port].tail + 1) % PORT_BUF_SIZE;
+        ports[port].count--;
+        read++;
+    }
+    return read;
 
     return -1;
 }
